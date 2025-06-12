@@ -7,5 +7,9 @@
 // Example clause (x1 OR NOT x2) -> {1, -2}
 
 bool is_satisfiable(int num_vars, const std::vector<std::vector<int>>& cnf);
+// A simple DPLL style solver with unit propagation. This is typically much
+// faster than the brute force algorithm above and is used for the runtime
+// comparison in the tests.
+bool is_satisfiable_fast(int num_vars, const std::vector<std::vector<int>>& cnf);
 
 #endif // SAT_SOLVER_H

@@ -36,6 +36,25 @@ TEST(SATSolverTest, LargeFormulaRuntime) {
     std::cerr << "Large formula runtime: " << diff.count() << " seconds\n";
 }
 
+TEST(SATSolverTest, LargeFormulaFastRuntime) {
+    const int n = 25;
+    std::vector<std::vector<int>> cnf;
+    for (int i = 1; i <= n; ++i) {
+        cnf.push_back({i});
+    }
+    std::vector<int> neg_clause;
+    for (int i = 1; i <= n; ++i) neg_clause.push_back(-i);
+    cnf.push_back(neg_clause);
+
+    auto start = std::chrono::high_resolution_clock::now();
+    bool sat = is_satisfiable_fast(n, cnf);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    EXPECT_FALSE(sat);
+    EXPECT_LT(diff.count(), 1.0);
+    std::cerr << "Large formula fast runtime: " << diff.count() << " seconds\n";
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
