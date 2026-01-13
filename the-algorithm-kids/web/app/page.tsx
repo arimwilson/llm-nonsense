@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { ReactReader } from 'react-reader';
 
 export default function Home() {
   const [showReader, setShowReader] = useState(false);
+  const [location, setLocation] = useState<string | number>(0);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-950 via-purple-950 to-slate-950">
@@ -246,11 +248,26 @@ export default function Home() {
                   Close Reader
                 </button>
               </div>
-              <div className="bg-white rounded-xl overflow-hidden" style={{ height: '80vh' }}>
-                <iframe
-                  src="/book1.epub"
-                  className="w-full h-full"
-                  title="The Algorithm Kids - Book 1"
+              <div className="rounded-xl overflow-hidden" style={{ height: '80vh' }}>
+                <ReactReader
+                  url="/book1.epub"
+                  location={location}
+                  locationChanged={(epubcfi: string) => setLocation(epubcfi)}
+                  epubOptions={{
+                    flow: 'paginated',
+                    manager: 'default',
+                  }}
+                  getRendition={(rendition) => {
+                    rendition.themes.default({
+                      '::selection': {
+                        background: 'rgba(168, 85, 247, 0.4)'
+                      },
+                      'body': {
+                        color: '#1e293b !important',
+                        background: '#ffffff !important',
+                      }
+                    });
+                  }}
                 />
               </div>
               <div className="mt-4 text-purple-400">
