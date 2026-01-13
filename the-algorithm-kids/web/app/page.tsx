@@ -30,7 +30,7 @@ export default function Home() {
           <div className="flex flex-col items-center text-center">
             {/* Cover Image */}
             <div className="relative mb-12 w-full max-w-sm">
-              <div className="relative w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl shadow-purple-500/50 transform hover:scale-105 transition-transform duration-500">
+              <div className="relative w-full aspect-[11/6] rounded-2xl overflow-hidden shadow-2xl shadow-purple-500/50 transform hover:scale-105 transition-transform duration-500">
                 <Image
                   src="/cover.png"
                   alt="The Algorithm Kids Book Cover"
@@ -47,7 +47,7 @@ export default function Home() {
               <div className="inline-block mb-4">
                 <div className="loading-circle w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full"></div>
               </div>
-              <h2 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+              <h2 className="text-5xl md:text-7xl font-bold mb-6 leading-tight text-white">
                 The Fantasy Series for
                 <span className="gradient-text block mt-2 glitch">Generation Alpha</span>
               </h2>
