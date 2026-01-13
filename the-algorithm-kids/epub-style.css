@@ -1,0 +1,59 @@
+/* epub-style.css */
+
+body {
+    font-family: "Georgia", "Times New Roman", serif;
+    font-size: 1em;
+    line-height: 1.5;
+    margin: 0 5pt;
+    text-align: justify;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-weight: bold;
+    color: #333333;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+}
+
+h1 {
+    text-align: center;
+    page-break-before: always; /* Starts new chapters on a new page */
+    border-bottom: 1px solid #eeeeee;
+    padding-bottom: 0.2em;
+}
+
+p {
+    margin-bottom: 1em;
+    text-indent: 0; /* Modern style uses spacing between paragraphs rather than indenting */
+}
+
+/* Ensures images don't overflow the screen width */
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 1em auto;
+}
+
+/* Styling for code blocks if your book is technical */
+pre {
+    background-color: #f5f5f5;
+    padding: 10px;
+    border: 1px solid #ccc;
+    overflow-x: auto;
+    font-size: 0.9em;
+}
+
+code {
+    font-family: "Courier New", monospace;
+    background-color: #f5f5f5;
+}
+
+blockquote {
+    border-left: 4px solid #dddddd;
+    margin-left: 0;
+    padding-left: 1em;
+    color: #555555;
+    font-style: italic;
+}
