@@ -26,13 +26,28 @@ export default function Home() {
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 digital-noise">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex flex-col items-center text-center">
+            {/* Cover Image */}
+            <div className="relative mb-12 w-full max-w-sm">
+              <div className="relative w-full aspect-[11/6] rounded-2xl overflow-hidden shadow-2xl shadow-purple-500/50 transform hover:scale-105 transition-transform duration-500">
+                <Image
+                  src="/cover.png"
+                  alt="The Algorithm Kids Book Cover"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <div className="absolute -z-10 top-10 left-10 w-full h-full bg-gradient-to-br from-purple-600/30 to-pink-600/30 rounded-2xl blur-xl"></div>
+            </div>
+
+            {/* Marketing Copy */}
             <div>
               <div className="inline-block mb-4">
                 <div className="loading-circle w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full"></div>
               </div>
-              <h2 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+              <h2 className="text-5xl md:text-7xl font-bold mb-6 leading-tight text-white">
                 The Fantasy Series for
                 <span className="gradient-text block mt-2 glitch">Generation Alpha</span>
               </h2>
@@ -42,7 +57,7 @@ export default function Home() {
                 the magic is computational, the creatures are digital, and the ultimate
                 battle is for attention itself.
               </p>
-              <div className="flex gap-4">
+              <div className="flex gap-4 justify-center">
                 <a
                   href="#read"
                   className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-bold text-white hover:from-purple-500 hover:to-pink-500 transition-all transform hover:scale-105 shadow-lg shadow-purple-500/50"
@@ -56,18 +71,6 @@ export default function Home() {
                   Watch Trailer
                 </a>
               </div>
-            </div>
-            <div className="relative">
-              <div className="relative w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl shadow-purple-500/50 transform hover:scale-105 transition-transform duration-500">
-                <Image
-                  src="/cover.png"
-                  alt="The Algorithm Kids Book Cover"
-                  fill
-                  className="object-cover"
-                  priority
-                />
-              </div>
-              <div className="absolute -z-10 top-10 left-10 w-full h-full bg-gradient-to-br from-purple-600/30 to-pink-600/30 rounded-2xl blur-xl"></div>
             </div>
           </div>
         </div>
