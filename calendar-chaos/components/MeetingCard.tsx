@@ -44,13 +44,20 @@ export default function MeetingCard({
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: isDragging ? 0.5 : 1, y: 0 }}
-      whileHover={{ scale: 1.02 }}
+      initial={{ opacity: 0, y: 20, scale: 0.9 }}
+      animate={{
+        opacity: isDragging ? 0.5 : 1,
+        y: 0,
+        scale: 1,
+        rotate: isDragging ? 5 : 0
+      }}
+      whileHover={{ scale: 1.03, rotate: isDragging ? 5 : -1 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       className={`
         p-3 rounded-lg border-2 ${priorityColor} ${priorityBg}
         cursor-grab active:cursor-grabbing
-        transition-all shadow-sm hover:shadow-md
+        transition-all shadow-sm hover:shadow-lg
         ${isDragging ? 'opacity-50' : ''}
       `}
     >

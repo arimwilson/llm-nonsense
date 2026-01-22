@@ -19,6 +19,15 @@ export default function ScoreBoard({
   const scorePercentage = Math.min((score / level.scoreThreshold) * 100, 100);
   const isScoreThresholdMet = score >= level.scoreThreshold;
 
+  const getMotivationalMessage = () => {
+    if (failedMeetings >= 2) return '⚠️ Careful! One more failure = game over!';
+    if (scorePercentage >= 100) return '🎉 You\'re crushing it!';
+    if (scorePercentage >= 75) return '🔥 Almost there!';
+    if (scorePercentage >= 50) return '💪 Halfway to victory!';
+    if (scorePercentage >= 25) return '👍 Good start!';
+    return '📅 Let\'s schedule some meetings!';
+  };
+
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="max-w-7xl mx-auto">
@@ -87,13 +96,14 @@ export default function ScoreBoard({
             )}
           </div>
 
-          {/* Level Info */}
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="text-sm font-medium text-gray-700 mb-1">Level Details</div>
-            <div className="text-xs text-gray-600 space-y-0.5">
-              <div>{level.principals.length} Principals</div>
-              <div>{level.meetingsToSchedule} Meetings</div>
-              <div className="text-gray-500 italic">{level.description}</div>
+          {/* Motivational Status */}
+          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-3 border-2 border-blue-100">
+            <div className="text-sm font-bold text-gray-900 mb-2 text-center">
+              {getMotivationalMessage()}
+            </div>
+            <div className="text-xs text-gray-600 text-center space-y-0.5">
+              <div className="font-medium">{level.principals.length} Execs • {level.meetingsToSchedule} Meetings</div>
+              <div className="text-gray-500 italic">&quot;{level.description}&quot;</div>
             </div>
           </div>
         </div>

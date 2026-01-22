@@ -16,14 +16,17 @@ export default function LevelComplete({
   onRestart,
 }: LevelCompleteProps) {
   const messages = [
-    'Excellent work! Ready for more?',
-    'You handled that like a pro!',
-    'Smooth scheduling! Next challenge awaits.',
-    'Calendar mastery achieved!',
-    'You survived the chaos!',
+    { text: 'Not bad for a rookie! 🌟', subtext: 'But wait until you see what\'s coming...' },
+    { text: 'You\'re getting the hang of this! 💪', subtext: 'The executives are starting to trust you.' },
+    { text: 'Calendar wizard in the making! 🧙‍♂️', subtext: 'Q4 planning doesn\'t scare you!' },
+    { text: 'Board week? More like board WEAK! 🔥', subtext: 'You handled that pressure like a pro!' },
+    { text: 'LEGENDARY STATUS ACHIEVED! 🏆', subtext: 'You are the meeting scheduling MASTER!' },
   ];
 
   const message = messages[level - 1] || messages[messages.length - 1];
+
+  const scoreGrade = score >= 2000 ? 'S' : score >= 1500 ? 'A' : score >= 1000 ? 'B' : score >= 500 ? 'C' : 'D';
+  const gradeColor = scoreGrade === 'S' ? 'text-yellow-500' : scoreGrade === 'A' ? 'text-green-500' : scoreGrade === 'B' ? 'text-blue-500' : 'text-gray-500';
 
   return (
     <motion.div
@@ -47,11 +50,41 @@ export default function LevelComplete({
           </motion.div>
 
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Level Complete!</h2>
-          <p className="text-lg text-gray-600 mb-6">{message}</p>
+          <p className="text-lg font-semibold text-gray-800 mb-2">{message.text}</p>
+          <p className="text-sm text-gray-600 mb-6">{message.subtext}</p>
 
-          <div className="bg-gray-50 rounded-lg p-6 mb-6">
-            <div className="text-sm text-gray-600 mb-2">Final Score</div>
-            <div className="text-4xl font-bold text-blue-600">{score}</div>
+          <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-sm text-gray-600 mb-1">Final Score</div>
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.3, type: 'spring' }}
+                  className="text-5xl font-bold text-blue-600"
+                >
+                  {score}
+                </motion.div>
+              </div>
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 0.5, type: 'spring' }}
+                className={`text-6xl font-black ${gradeColor}`}
+              >
+                {scoreGrade}
+              </motion.div>
+            </div>
+            {scoreGrade === 'S' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.7 }}
+                className="text-xs text-center text-yellow-600 font-semibold"
+              >
+                ⭐ PERFECT SCORE! You're a scheduling superhero! ⭐
+              </motion.div>
+            )}
           </div>
 
           <div className="space-y-3">

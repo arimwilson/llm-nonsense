@@ -1,5 +1,6 @@
 import { Meeting, Priority, Principal } from './types';
 import { PREFIXES, SUBJECTS, SUFFIXES, MEETING_DURATIONS } from '@/data/buzzwords';
+import { getFunnyMeetingName } from '@/data/reactions';
 
 let meetingIdCounter = 0;
 
@@ -8,6 +9,11 @@ function getRandomElement<T>(array: T[]): T {
 }
 
 function generateMeetingTitle(): string {
+  // 15% chance of getting a funny meeting name
+  if (Math.random() < 0.15) {
+    return getFunnyMeetingName();
+  }
+
   const prefix = getRandomElement(PREFIXES);
   const subject = getRandomElement(SUBJECTS);
   const suffix = getRandomElement(SUFFIXES);

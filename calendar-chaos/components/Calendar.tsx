@@ -5,6 +5,7 @@ import { START_HOUR, END_HOUR, SLOT_DURATION, DAYS } from '@/lib/constants';
 import useGameStore from '@/lib/gameState';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { soundEngine } from '@/lib/sounds';
 
 interface CalendarProps {
   calendar: CalendarSlot[][][];
@@ -65,7 +66,10 @@ export default function Calendar({ calendar, principals }: CalendarProps) {
     );
 
     if (success) {
+      soundEngine.playMeetingScheduled();
       setDraggedMeeting(null);
+    } else {
+      soundEngine.playError();
     }
   };
 
