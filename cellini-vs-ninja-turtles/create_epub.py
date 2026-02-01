@@ -84,7 +84,6 @@ def create_placeholder_cover():
               font=author_font, anchor="mm")
 
     cover_path = os.path.join(BOOK_DIR, 'cover.png')
-    img.save(cover_path, 'PNG')
     return cover_path
 
 
@@ -166,7 +165,6 @@ def create_illustration():
               fill=(200, 200, 200), font=font, anchor="mm")
 
     illust_path = os.path.join(BOOK_DIR, 'illustration.png')
-    img.save(illust_path, 'PNG')
     return illust_path
 
 
