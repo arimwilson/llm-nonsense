@@ -37,7 +37,7 @@ GET https://www.linkedin.com/voyager/api/graphql
 - `start` — 0-based offset for pagination
 - `network` filter values: `F` (1st), `S` (2nd), `O` (3rd+)
 - Multiple degrees combined with `|` separator (e.g., `F|S`)
-- Max results per request: 49
+- Max results per request: 50
 
 **Response structure (JSON):**
 ```
@@ -107,7 +107,7 @@ POST https://www.linkedin.com/voyager/api/graphql
 
 - `degree` — Required. Which connection degree(s) to search. `"all"` searches across all degrees.
 - `page` — Optional, default 1. 1-based page number.
-- `page_size` — Optional, default 10, max 49. Results per page.
+- `page_size` — Optional, default 10, max 50. Results per page.
 - `keywords` — Optional. Search keywords to filter results.
 
 **Output schema:**
