@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from pathlib import Path
-
 try:
     from mcp.server.fastmcp import FastMCP
 except ModuleNotFoundError:  # pragma: no cover - fallback for local dev without MCP deps
@@ -25,29 +23,14 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for local dev without
                 "to run the LinkedIn MCP server."
             )
 
-from linkedin_mcp.config import LinkedInConfig, load_config
+from pydantic import ValidationError
+
+from linkedin_mcp.config import ConfigError, load_config
+from linkedin_mcp.linkedin_client import AuthenticationError, LinkedInClient
+from linkedin_mcp.models import SearchConnectionsInput
+from linkedin_mcp.search import ParseError, search_connections
 
 mcp = FastMCP("linkedin-mcp")
-
-
-def _load_runtime_config() -> LinkedInConfig:
-    # Startup still succeeds without auth to allow tool advertisement in Phase 1.
-    try:
-        return load_config()
-    except Exception:
-        return LinkedInConfig(
-            base_url="https://www.linkedin.com",
-            search_query_id="",
-            pdf_query_id="",
-            request_interval_seconds=5.0,
-            pdf_monthly_cap=90,
-            output_dir=Path("linkedin/output"),
-            user_agent="",
-            cookies={},
-        )
-
-
-_RUNTIME_CONFIG = _load_runtime_config()
 
 
 @mcp.tool()
@@ -58,25 +41,42 @@ def linkedin_search_connections(
     keywords: str = "",
 ) -> dict[str, Any]:
     """Search LinkedIn connections filtered by degree."""
-    return {
-        "phase": 1,
-        "message": "Tool scaffolded. Search implementation lands in Phase 3.",
-        "degree_filter": degree,
-        "page": page,
-        "page_size": page_size,
-        "keywords": keywords,
-    }
+    try:
+        validated = SearchConnectionsInput(
+            degree=degree,
+            page=page,
+            page_size=page_size,
+            keywords=keywords,
+        )
+        config = load_config()
+        with LinkedInClient(config) as client:
+            result = search_connections(client, validated)
+        return result.model_dump(mode="json")
+    except (
+        ConfigError,
+        ValidationError,
+        AuthenticationError,
+        ParseError,
+        ValueError,
+    ) as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 @mcp.tool()
 def linkedin_get_profile_pdf(profile_url: str) -> dict[str, Any]:
     """Download a LinkedIn profile PDF given a profile URL."""
+    monthly_cap = 90
+    try:
+        monthly_cap = load_config().pdf_monthly_cap
+    except ConfigError:
+        pass
+
     return {
-        "phase": 1,
+        "phase": 3,
         "message": "Tool scaffolded. PDF implementation lands in Phase 4.",
         "profile_url": profile_url,
         "month_downloads_used": 0,
-        "month_downloads_remaining": _RUNTIME_CONFIG.pdf_monthly_cap,
+        "month_downloads_remaining": monthly_cap,
     }
 
 

@@ -89,6 +89,10 @@ class LinkedInClient:
     def close(self) -> None:
         self._client.close()
 
+    @property
+    def config(self) -> LinkedInConfig:
+        return self._config
+
     def __enter__(self) -> LinkedInClient:
         return self
 
