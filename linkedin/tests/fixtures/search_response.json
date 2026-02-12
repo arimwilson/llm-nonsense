@@ -1,0 +1,55 @@
+{
+  "data": {
+    "searchDashClustersByAll": {
+      "paging": {
+        "total": 1234
+      },
+      "elements": [
+        {
+          "items": [
+            {
+              "item": {
+                "entityResult": {
+                  "title": { "text": "Jane Smith" },
+                  "primarySubtitle": { "text": "Senior Engineer at Google" },
+                  "secondarySubtitle": { "text": "San Francisco Bay Area" },
+                  "navigationUrl": "https://www.linkedin.com/in/jane-smith/",
+                  "entityUrn": "urn:li:fsd_profile:AbC123",
+                  "entityCustomTrackingInfo": {
+                    "memberDistance": "DISTANCE_1"
+                  }
+                }
+              }
+            },
+            {
+              "item": {
+                "entityResult": {
+                  "title": { "text": "John Doe" },
+                  "primarySubtitle": { "text": "Product Manager" },
+                  "secondarySubtitle": { "text": "New York, New York" },
+                  "navigationUrl": "/in/john-doe/",
+                  "entityUrn": "urn:li:fsd_profile:Def456",
+                  "entityCustomTrackingInfo": {
+                    "memberDistance": "DISTANCE_2"
+                  }
+                }
+              }
+            },
+            {
+              "item": {
+                "entityResult": {
+                  "title": { "text": "No URL Person" },
+                  "primarySubtitle": { "text": "Ignored Row" },
+                  "secondarySubtitle": { "text": "N/A" },
+                  "entityCustomTrackingInfo": {
+                    "memberDistance": "DISTANCE_3"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
