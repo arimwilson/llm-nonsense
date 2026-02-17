@@ -16,15 +16,29 @@ def test_build_search_query_params_uses_offset_and_network_tokens() -> None:
         keywords="machine learning",
     )
 
-    params = build_search_query_params(
+    qs = build_search_query_params(
         tool_input,
         search_query_id="voyagerSearchDashClusters.example",
     )
 
-    assert params["queryId"] == "voyagerSearchDashClusters.example"
-    assert "start:10" in params["variables"]
-    assert "(key:network,value:List(F,S,O))" in params["variables"]
-    assert 'keywords:"machine learning"' in params["variables"]
+    assert "queryId=voyagerSearchDashClusters.example" in qs
+    assert "includeWebMetadata=true" in qs
+    assert "start:10" in qs
+    assert "(key:network,value:List(F,S,O))" in qs
+    assert "keywords:machine learning," in qs
+    assert "count:10" in qs
+
+
+def test_build_search_query_params_omits_empty_keywords() -> None:
+    tool_input = SearchConnectionsInput(degree="1st", page=1, page_size=5, keywords="")
+
+    qs = build_search_query_params(
+        tool_input,
+        search_query_id="voyagerSearchDashClusters.example",
+    )
+
+    assert "keywords:" not in qs
+    assert "query:(flagshipSearchIntent:" in qs
 
 
 def test_parse_search_response_extracts_expected_fields(

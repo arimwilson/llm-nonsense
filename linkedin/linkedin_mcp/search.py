@@ -31,10 +31,6 @@ class ParseError(RuntimeError):
     """Raised when the search response cannot be parsed safely."""
 
 
-def _encode_restli_string(value: str) -> str:
-    return json.dumps(value)
-
-
 def _normalize_profile_url(value: str) -> str:
     cleaned = value.strip()
     if not cleaned:
@@ -63,9 +59,21 @@ def _fallback_degree(requested_degree: DegreeFilter) -> str:
 
 
 def _extract_profile_urn(entity_result: dict[str, Any]) -> str | None:
-    entity_urn = entity_result.get("entityUrn")
-    if isinstance(entity_urn, str) and entity_urn.startswith("urn:li:fsd_profile:"):
+    entity_urn = entity_result.get("entityUrn", "")
+    if not isinstance(entity_urn, str):
+        return None
+    # Direct profile URN
+    if entity_urn.startswith("urn:li:fsd_profile:"):
         return entity_urn
+    # Normalized format: urn:li:fsd_entityResultViewModel:(urn:li:fsd_profile:XXX,...)
+    if "urn:li:fsd_profile:" in entity_urn:
+        start = entity_urn.index("urn:li:fsd_profile:")
+        rest = entity_urn[start:]
+        # Trim at first comma or closing paren
+        for ch in (",", ")"):
+            if ch in rest:
+                rest = rest[: rest.index(ch)]
+        return rest
     return None
 
 
@@ -73,18 +81,56 @@ def build_search_query_params(
     search_input: SearchConnectionsInput,
     *,
     search_query_id: str,
-) -> dict[str, str]:
+) -> str:
     offset = (search_input.page - 1) * search_input.page_size
     network_tokens = ",".join(NETWORK_TOKENS[search_input.degree])
-    encoded_keywords = _encode_restli_string(search_input.keywords.strip())
+    keywords = search_input.keywords.strip()
+    keywords_part = f"keywords:{keywords}," if keywords else ""
     variables = (
         f"(start:{offset},origin:GLOBAL_SEARCH_HEADER,"
-        f"query:(keywords:{encoded_keywords},flagshipSearchIntent:SEARCH_SRP,"
+        f"query:({keywords_part}flagshipSearchIntent:SEARCH_SRP,"
         f"queryParameters:List((key:resultType,value:List(PEOPLE)),"
         f"(key:network,value:List({network_tokens}))),"
-        "includeFiltersInResponse:false))"
+        f"includeFiltersInResponse:false),count:{search_input.page_size})"
     )
-    return {"variables": variables, "queryId": search_query_id}
+    return (
+        f"variables={variables}"
+        f"&queryId={search_query_id}"
+        f"&includeWebMetadata=true"
+    )
+
+
+def _build_included_lookup(included: list[Any]) -> dict[str, dict[str, Any]]:
+    """Build a lookup from entityUrn to entity dict from the `included` array."""
+    lookup: dict[str, dict[str, Any]] = {}
+    for entry in included:
+        if isinstance(entry, dict):
+            urn = entry.get("entityUrn")
+            if isinstance(urn, str):
+                lookup[urn] = entry
+    return lookup
+
+
+def _resolve_entity_result(
+    wrapped_item: dict[str, Any],
+    included_lookup: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Resolve an entity result, trying inline first then *entityResult reference."""
+    item = wrapped_item.get("item", {})
+    if not isinstance(item, dict):
+        return None
+
+    # Try inline entityResult (old format)
+    entity_result = item.get("entityResult")
+    if isinstance(entity_result, dict) and entity_result.get("navigationUrl"):
+        return entity_result
+
+    # Try normalized *entityResult reference (new format)
+    ref_urn = item.get("*entityResult")
+    if isinstance(ref_urn, str) and ref_urn in included_lookup:
+        return included_lookup[ref_urn]
+
+    return None
 
 
 def parse_search_response(
@@ -96,9 +142,21 @@ def parse_search_response(
     if not isinstance(data, dict):
         raise ParseError("Missing top-level 'data' object in search response.")
 
+    # LinkedIn may nest the query results under data.data (GraphQL envelope)
+    inner = data.get("data", data)
+    if isinstance(inner, dict) and "searchDashClustersByAll" not in data:
+        data = inner
+
     clusters = data.get("searchDashClustersByAll")
     if not isinstance(clusters, dict):
-        raise ParseError("Missing 'searchDashClustersByAll' in search response.")
+        raise ParseError(
+            f"Missing 'searchDashClustersByAll' in search response. "
+            f"Available keys: {list(data.keys())}"
+        )
+
+    # Build lookup for normalized JSON references
+    included = payload.get("included", [])
+    included_lookup = _build_included_lookup(included if isinstance(included, list) else [])
 
     total_available: int | None = None
     paging = clusters.get("paging")
@@ -123,10 +181,7 @@ def parse_search_response(
             if not isinstance(wrapped_item, dict):
                 continue
 
-            entity_result = (
-                wrapped_item.get("item", {})
-                .get("entityResult", {})
-            )
+            entity_result = _resolve_entity_result(wrapped_item, included_lookup)
             if not isinstance(entity_result, dict):
                 continue
 
@@ -164,11 +219,11 @@ def search_connections(
     client: LinkedInClient,
     search_input: SearchConnectionsInput,
 ) -> SearchConnectionsOutput:
-    params = build_search_query_params(
+    query_string = build_search_query_params(
         search_input,
         search_query_id=client.config.search_query_id,
     )
-    response = client.get("/voyager/api/graphql", params=params)
+    response = client.get(f"/voyager/api/graphql?{query_string}")
     payload = response.json()
 
     connections, total_available = parse_search_response(
