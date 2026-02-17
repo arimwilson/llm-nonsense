@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 try:
@@ -27,10 +28,22 @@ from pydantic import ValidationError
 
 from linkedin_mcp.config import ConfigError, load_config
 from linkedin_mcp.linkedin_client import AuthenticationError, LinkedInClient
-from linkedin_mcp.models import SearchConnectionsInput
-from linkedin_mcp.search import ParseError, search_connections
+from linkedin_mcp.models import GetProfilePdfInput, SearchConnectionsInput
+from linkedin_mcp.pdf_download import ParseError as PdfParseError
+from linkedin_mcp.pdf_download import download_profile_pdf
+from linkedin_mcp.profile_resolver import ProfileNotFoundError
+from linkedin_mcp.search import ParseError as SearchParseError
+from linkedin_mcp.search import search_connections
+from linkedin_mcp.usage_tracker import QuotaExceededError, UsageTracker
 
 mcp = FastMCP("linkedin-mcp")
+
+
+def _make_usage_tracker() -> UsageTracker:
+    config = load_config()
+    # State lives alongside the output directory: linkedin/.state/pdf_usage.json
+    state_file = config.output_dir.parent / ".state" / "pdf_usage.json"
+    return UsageTracker(state_file=state_file, monthly_cap=config.pdf_monthly_cap)
 
 
 @mcp.tool()
@@ -56,7 +69,7 @@ def linkedin_search_connections(
         ConfigError,
         ValidationError,
         AuthenticationError,
-        ParseError,
+        SearchParseError,
         ValueError,
     ) as exc:
         raise RuntimeError(str(exc)) from exc
@@ -65,19 +78,23 @@ def linkedin_search_connections(
 @mcp.tool()
 def linkedin_get_profile_pdf(profile_url: str) -> dict[str, Any]:
     """Download a LinkedIn profile PDF given a profile URL."""
-    monthly_cap = 90
     try:
-        monthly_cap = load_config().pdf_monthly_cap
-    except ConfigError:
-        pass
-
-    return {
-        "phase": 3,
-        "message": "Tool scaffolded. PDF implementation lands in Phase 4.",
-        "profile_url": profile_url,
-        "month_downloads_used": 0,
-        "month_downloads_remaining": monthly_cap,
-    }
+        validated = GetProfilePdfInput(profile_url=profile_url)
+        config = load_config()
+        usage_tracker = _make_usage_tracker()
+        with LinkedInClient(config) as client:
+            result = download_profile_pdf(client, validated, usage_tracker)
+        return result.model_dump(mode="json")
+    except (
+        ConfigError,
+        ValidationError,
+        AuthenticationError,
+        PdfParseError,
+        ProfileNotFoundError,
+        QuotaExceededError,
+        ValueError,
+    ) as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 def main() -> None:

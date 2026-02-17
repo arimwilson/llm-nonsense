@@ -44,6 +44,7 @@ class LinkedInClient:
         timeout_seconds: float = 30.0,
     ) -> None:
         self._config = config
+        self._transport = transport  # stored for download_binary reuse in tests
         self._rate_limiter = RateLimiter(config.request_interval_seconds)
         self._client = httpx.Client(
             base_url=config.base_url,
@@ -149,3 +150,19 @@ class LinkedInClient:
             json_body=json_body,
             headers=headers,
         )
+
+    def download_binary(self, url: str) -> bytes:
+        """Fetch binary content from an absolute URL (e.g., an ambry PDF download URL).
+
+        Uses a fresh httpx.Client without a base_url so absolute external URLs
+        work correctly. Still goes through the rate limiter.
+        """
+        self._rate_limiter.wait()
+        with httpx.Client(
+            transport=self._transport,
+            follow_redirects=True,
+            timeout=60.0,
+        ) as tmp:
+            response = tmp.get(url)
+            response.raise_for_status()
+            return response.content

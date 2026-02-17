@@ -1,0 +1,9 @@
+{
+  "data": {},
+  "included": [
+    {
+      "entityUrn": "urn:li:fsd_saveToMemberPdf:12345",
+      "downloadUrl": "https://media.licdn.com/dms/pdf/v2/sample-profile-jane-smith.pdf?e=1234567890&t=abc123"
+    }
+  ]
+}
