@@ -155,10 +155,12 @@ class LinkedInClient:
         """Fetch binary content from an absolute URL (e.g., an ambry PDF download URL).
 
         Uses a fresh httpx.Client without a base_url so absolute external URLs
-        work correctly. Still goes through the rate limiter.
+        work correctly. Passes session cookies so authenticated ambry URLs succeed.
+        Still goes through the rate limiter.
         """
         self._rate_limiter.wait()
         with httpx.Client(
+            cookies=self._config.cookies,
             transport=self._transport,
             follow_redirects=True,
             timeout=60.0,

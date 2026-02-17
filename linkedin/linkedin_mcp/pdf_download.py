@@ -39,36 +39,32 @@ def _validate_profile_url(profile_url: str) -> str:
     return m.group(1)
 
 
+def _find_download_url(obj: Any) -> str | None:
+    """Recursively search any JSON structure for a 'downloadUrl' string value."""
+    if isinstance(obj, dict):
+        url = obj.get("downloadUrl")
+        if isinstance(url, str) and url.startswith("http"):
+            return url
+        for value in obj.values():
+            result = _find_download_url(value)
+            if result:
+                return result
+    elif isinstance(obj, list):
+        for item in obj:
+            result = _find_download_url(item)
+            if result:
+                return result
+    return None
+
+
 def _extract_download_url(payload: dict[str, Any]) -> str | None:
     """Extract downloadUrl from a PDF action response.
 
-    Handles both normalized JSON (included array with pointer references)
-    and inline data formats — consistent with the patterns learned from
-    the people search endpoint.
+    Uses a recursive search to handle the deeply nested Voyager response
+    structure (data.data.doSaveToPdfV2IdentityDashProfileActionsV2.result.downloadUrl)
+    as well as normalized JSON (included array) and any future layout changes.
     """
-    # Check included array first (normalized JSON format)
-    included = payload.get("included", [])
-    if isinstance(included, list):
-        for entry in included:
-            if isinstance(entry, dict):
-                url = entry.get("downloadUrl")
-                if isinstance(url, str) and url.startswith("http"):
-                    return url
-
-    # Check data object directly (inline format)
-    data = payload.get("data", {})
-    if isinstance(data, dict):
-        url = data.get("downloadUrl")
-        if isinstance(url, str) and url.startswith("http"):
-            return url
-        # GraphQL double-envelope: data.data
-        inner = data.get("data", {})
-        if isinstance(inner, dict):
-            url = inner.get("downloadUrl")
-            if isinstance(url, str) and url.startswith("http"):
-                return url
-
-    return None
+    return _find_download_url(payload)
 
 
 def _build_pdf_request(
