@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PS1 Tech Demo — North Korean Bunker</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; cursor: none; }
+canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+#overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 10;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0,0,0,0.15) 0px,
+    rgba(0,0,0,0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+#info {
+  position: fixed; bottom: 12px; left: 12px; z-index: 20;
+  color: #8f8; font-family: monospace; font-size: 11px;
+  text-shadow: 1px 1px 0 #000; pointer-events: none; opacity: 0.7;
+}
+#start-screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: #000; z-index: 100; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; cursor: pointer;
+}
+#start-screen h1 {
+  color: #aab; font-family: monospace; font-size: 20px;
+  text-transform: uppercase; letter-spacing: 4px; margin-bottom: 30px;
+}
+#start-screen p {
+  color: #667; font-family: monospace; font-size: 13px;
+  animation: blink 1.2s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+</style>
+</head>
+<body>
+<div id="start-screen">
+  <h1>Tactical Espionage Demo</h1>
+  <p>[ Click to Start ]</p>
+</div>
+<div id="overlay"></div>
+<div id="info">PS1 RENDER MODE — 320×240</div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ============================================================
+// PS1 SHADERS
+// ============================================================
+const PS1_VERTEX = `
+precision mediump float;
+uniform float u_snapResolution;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+uniform mat4 modelMatrix;
+attribute vec3 position;
+attribute vec2 uv;
+attribute vec3 color;
+varying vec2 v_uv;
+varying vec3 v_color;
+varying float v_depth;
+
+void main() {
+  vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
+  vec4 clipPos = projectionMatrix * viewPos;
+
+  // Vertex snapping — snap to low-res grid in screen space
+  float snap = u_snapResolution;
+  clipPos.xyz = clipPos.xyz / clipPos.w;
+  clipPos.x = floor(clipPos.x * snap + 0.5) / snap;
+  clipPos.y = floor(clipPos.y * snap + 0.5) / snap;
+  clipPos.xyz *= clipPos.w;
+
+  gl_Position = clipPos;
+
+  // Affine texture mapping — divide UVs by W for noperspective emulation
+  v_uv = uv * clipPos.w;
+  v_depth = clipPos.w;
+  v_color = color;
+}
+`;
+
+const PS1_FRAGMENT = `
+precision mediump float;
+uniform sampler2D u_texture;
+uniform vec3 u_tint;
+uniform float u_ambient;
+varying vec2 v_uv;
+varying vec3 v_color;
+varying float v_depth;
+
+void main() {
+  // Reconstruct affine UVs (no perspective correction)
+  vec2 uv = v_uv / v_depth;
+  vec4 tex = texture2D(u_texture, uv);
+  vec3 col = tex.rgb * u_tint * v_color;
+
+  // Apply ambient light
+  col = col * u_ambient + col * (1.0 - u_ambient) * 0.5;
+
+  // Posterize to 15-bit color (5 bits per channel = 32 levels)
+  col = floor(col * 31.0 + 0.5) / 31.0;
+
+  gl_FragColor = vec4(col, tex.a);
+}
+`;
+
+// ============================================================
+// TEXTURE GENERATOR
+// ============================================================
+function makeTexture(width, height, drawFn) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  drawFn(ctx, width, height);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
+function concreteTex() {
+  return makeTexture(64, 64, (ctx, w, h) => {
+    ctx.fillStyle = '#5a5a52';
+    ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 300; i++) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      const b = 70 + Math.random() * 30;
+      ctx.fillStyle = `rgb(${b},${b},${b - 5})`;
+      ctx.fillRect(x, y, 1 + Math.random() * 2, 1);
+    }
+    // Horizontal mortar lines
+    for (let y = 0; y < h; y += 16) {
+      ctx.fillStyle = 'rgba(40,40,38,0.6)';
+      ctx.fillRect(0, y, w, 1);
+    }
+  });
+}
+
+function floorTex() {
+  return makeTexture(64, 64, (ctx, w, h) => {
+    ctx.fillStyle = '#3a3a35';
+    ctx.fillRect(0, 0, w, h);
+    // Tile grid
+    for (let x = 0; x < w; x += 32) {
+      ctx.fillStyle = 'rgba(30,30,28,0.8)';
+      ctx.fillRect(x, 0, 1, h);
+    }
+    for (let y = 0; y < h; y += 32) {
+      ctx.fillStyle = 'rgba(30,30,28,0.8)';
+      ctx.fillRect(0, y, w, 1);
+    }
+    for (let i = 0; i < 200; i++) {
+      ctx.fillStyle = `rgba(50,50,45,${Math.random() * 0.4})`;
+      ctx.fillRect(Math.random() * w, Math.random() * h, 1, 1);
+    }
+  });
+}
+
+function metalTex() {
+  return makeTexture(32, 32, (ctx, w, h) => {
+    ctx.fillStyle = '#4a4a4d';
+    ctx.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y++) {
+      const b = 65 + Math.sin(y * 0.5) * 10;
+      ctx.fillStyle = `rgba(${b},${b},${b + 5},0.3)`;
+      ctx.fillRect(0, y, w, 1);
+    }
+  });
+}
+
+function uniformTex(baseColor) {
+  return makeTexture(32, 32, (ctx, w, h) => {
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 40; i++) {
+      const b = Math.random() * 20 - 10;
+      ctx.fillStyle = `rgba(${128 + b},${128 + b},${128 + b},0.1)`;
+      ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+    }
+  });
+}
+
+function skinTex() {
+  return makeTexture(16, 16, (ctx, w, h) => {
+    ctx.fillStyle = '#c8a882';
+    ctx.fillRect(0, 0, w, h);
+  });
+}
+
+function flagTex() {
+  return makeTexture(64, 64, (ctx, w, h) => {
+    // DPRK-style flag
+    ctx.fillStyle = '#024fa2';
+    ctx.fillRect(0, 0, w, h);
+    // Red band
+    ctx.fillStyle = '#ed1c27';
+    ctx.fillRect(0, h * 0.2, w, h * 0.6);
+    // White stripes
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, h * 0.18, w, h * 0.04);
+    ctx.fillRect(0, h * 0.78, w, h * 0.04);
+    // White circle + red star
+    ctx.beginPath();
+    ctx.arc(w * 0.33, h * 0.5, h * 0.18, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.fillStyle = '#ed1c27';
+    const cx = w * 0.33, cy = h * 0.5, r = h * 0.13;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const angle = -Math.PI / 2 + i * (Math.PI * 2 / 5);
+      const px = cx + Math.cos(angle) * r;
+      const py = cy + Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+      const iAngle = angle + Math.PI / 5;
+      ctx.lineTo(cx + Math.cos(iAngle) * r * 0.4, cy + Math.sin(iAngle) * r * 0.4);
+    }
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+function mapTex() {
+  return makeTexture(64, 64, (ctx, w, h) => {
+    ctx.fillStyle = '#d4c8a0';
+    ctx.fillRect(0, 0, w, h);
+    // Simple peninsula shape
+    ctx.fillStyle = '#7a8a50';
+    ctx.beginPath();
+    ctx.moveTo(w * 0.35, h * 0.1);
+    ctx.lineTo(w * 0.55, h * 0.1);
+    ctx.lineTo(w * 0.6, h * 0.3);
+    ctx.lineTo(w * 0.55, h * 0.5);
+    ctx.lineTo(w * 0.5, h * 0.75);
+    ctx.lineTo(w * 0.45, h * 0.85);
+    ctx.lineTo(w * 0.4, h * 0.7);
+    ctx.lineTo(w * 0.35, h * 0.45);
+    ctx.lineTo(w * 0.3, h * 0.25);
+    ctx.closePath();
+    ctx.fill();
+    // DMZ line
+    ctx.strokeStyle = '#c00';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    ctx.moveTo(w * 0.3, h * 0.45);
+    ctx.lineTo(w * 0.6, h * 0.42);
+    ctx.stroke();
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([]);
+    for (let x = 0; x < w; x += 8) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+    for (let y = 0; y < h; y += 8) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+  });
+}
+
+function woodTex() {
+  return makeTexture(32, 32, (ctx, w, h) => {
+    ctx.fillStyle = '#5c3a1e';
+    ctx.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y++) {
+      const b = Math.sin(y * 0.8) * 12;
+      ctx.fillStyle = `rgba(${80 + b},${50 + b},${25 + b},0.4)`;
+      ctx.fillRect(0, y, w, 1);
+    }
+  });
+}
+
+// ============================================================
+// PS1 MATERIAL HELPER
+// ============================================================
+function ps1Material(texture, tint = [1, 1, 1], ambient = 0.6) {
+  return new THREE.RawShaderMaterial({
+    uniforms: {
+      u_texture: { value: texture },
+      u_tint: { value: new THREE.Vector3(...tint) },
+      u_ambient: { value: ambient },
+      u_snapResolution: { value: 120.0 },
+    },
+    vertexShader: PS1_VERTEX,
+    fragmentShader: PS1_FRAGMENT,
+    side: THREE.FrontSide,
+  });
+}
+
+function addVertexColors(geometry, color) {
+  const count = geometry.attributes.position.count;
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    colors[i * 3] = color[0];
+    colors[i * 3 + 1] = color[1];
+    colors[i * 3 + 2] = color[2];
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+}
+
+function makeBox(w, h, d, material, color = [1, 1, 1]) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  addVertexColors(geo, color);
+  return new THREE.Mesh(geo, material);
+}
+
+// ============================================================
+// CHARACTER BUILDER
+// ============================================================
+function buildHumanoid(uniformColor, hasRifle = false, isVIP = false) {
+  const group = new THREE.Group();
+  const uniTex = uniformTex(uniformColor);
+  const skin = skinTex();
+  const uniMat = ps1Material(uniTex, [1, 1, 1], 0.55);
+  const skinMat = ps1Material(skin, [1, 1, 1], 0.55);
+  const metalMat = ps1Material(metalTex(), [0.7, 0.7, 0.7], 0.5);
+
+  // Torso
+  const torso = makeBox(0.5, 0.6, 0.3, uniMat);
+  torso.position.y = 1.0;
+  group.add(torso);
+
+  // Head
+  const head = makeBox(0.25, 0.28, 0.25, skinMat);
+  head.position.y = 1.5;
+  group.add(head);
+
+  // Hat
+  if (isVIP) {
+    const hatBrim = makeBox(0.35, 0.04, 0.35, uniMat);
+    hatBrim.position.y = 1.65;
+    group.add(hatBrim);
+    const hatTop = makeBox(0.28, 0.14, 0.28, uniMat);
+    hatTop.position.y = 1.75;
+    group.add(hatTop);
+    // Gold star on hat
+    const star = makeBox(0.06, 0.06, 0.01, ps1Material(uniformTex('#ffd700'), [1, 1, 0.5]));
+    star.position.set(0, 1.72, 0.145);
+    group.add(star);
+  } else {
+    // Guard cap
+    const cap = makeBox(0.28, 0.08, 0.28, uniMat);
+    cap.position.y = 1.66;
+    group.add(cap);
+    const visor = makeBox(0.25, 0.02, 0.08, metalMat);
+    visor.position.set(0, 1.63, 0.14);
+    group.add(visor);
+  }
+
+  // Arms
+  const leftArm = new THREE.Group();
+  const la = makeBox(0.14, 0.5, 0.14, uniMat);
+  la.position.y = -0.25;
+  leftArm.add(la);
+  leftArm.position.set(-0.35, 1.25, 0);
+  group.add(leftArm);
+
+  const rightArm = new THREE.Group();
+  const ra = makeBox(0.14, 0.5, 0.14, uniMat);
+  ra.position.y = -0.25;
+  rightArm.add(ra);
+  rightArm.position.set(0.35, 1.25, 0);
+  group.add(rightArm);
+
+  // Legs
+  const leftLeg = new THREE.Group();
+  const ll = makeBox(0.16, 0.55, 0.16, uniMat);
+  ll.position.y = -0.275;
+  leftLeg.add(ll);
+  leftLeg.position.set(-0.12, 0.65, 0);
+  group.add(leftLeg);
+
+  const rightLeg = new THREE.Group();
+  const rl = makeBox(0.16, 0.55, 0.16, uniMat);
+  rl.position.y = -0.275;
+  rightLeg.add(rl);
+  rightLeg.position.set(0.12, 0.65, 0);
+  group.add(rightLeg);
+
+  // Boots
+  const lBoot = makeBox(0.17, 0.12, 0.22, metalMat);
+  lBoot.position.set(-0.12, 0.06, 0.02);
+  group.add(lBoot);
+  const rBoot = makeBox(0.17, 0.12, 0.22, metalMat);
+  rBoot.position.set(0.12, 0.06, 0.02);
+  group.add(rBoot);
+
+  // Rifle
+  if (hasRifle) {
+    const rifle = new THREE.Group();
+    const barrel = makeBox(0.04, 0.7, 0.04, metalMat);
+    barrel.position.y = 0;
+    rifle.add(barrel);
+    const stock = makeBox(0.06, 0.25, 0.08, ps1Material(woodTex()));
+    stock.position.y = -0.45;
+    rifle.add(stock);
+    rifle.position.set(0.45, 1.0, 0.1);
+    rifle.rotation.z = -0.15;
+    group.add(rifle);
+    group.userData.rifle = rifle;
+  }
+
+  group.userData.leftArm = leftArm;
+  group.userData.rightArm = rightArm;
+  group.userData.leftLeg = leftLeg;
+  group.userData.rightLeg = rightLeg;
+  group.userData.head = head;
+
+  return group;
+}
+
+// ============================================================
+// ROOM BUILDER
+// ============================================================
+function buildRoom(scene) {
+  const cTex = concreteTex();
+  const fTex = floorTex();
+  const wallMat = ps1Material(cTex, [0.85, 0.85, 0.8]);
+  const floorMat = ps1Material(fTex, [0.7, 0.7, 0.65]);
+  const ceilMat = ps1Material(cTex, [0.6, 0.6, 0.55]);
+
+  const ROOM_W = 12, ROOM_D = 10, ROOM_H = 3.5;
+
+  // Floor
+  const floor = makeBox(ROOM_W, 0.2, ROOM_D, floorMat);
+  floor.position.y = -0.1;
+  scene.add(floor);
+
+  // Ceiling
+  const ceil = makeBox(ROOM_W, 0.2, ROOM_D, ceilMat);
+  ceil.position.y = ROOM_H + 0.1;
+  scene.add(ceil);
+
+  // Walls
+  const backWall = makeBox(ROOM_W, ROOM_H, 0.2, wallMat);
+  backWall.position.set(0, ROOM_H / 2, -ROOM_D / 2);
+  scene.add(backWall);
+
+  const frontWall = makeBox(ROOM_W, ROOM_H, 0.2, wallMat);
+  frontWall.position.set(0, ROOM_H / 2, ROOM_D / 2);
+  scene.add(frontWall);
+
+  const leftWall = makeBox(0.2, ROOM_H, ROOM_D, wallMat);
+  leftWall.position.set(-ROOM_W / 2, ROOM_H / 2, 0);
+  scene.add(leftWall);
+
+  const rightWall = makeBox(0.2, ROOM_H, ROOM_D, wallMat);
+  rightWall.position.set(ROOM_W / 2, ROOM_H / 2, 0);
+  scene.add(rightWall);
+
+  // Desk
+  const deskMat = ps1Material(woodTex(), [0.9, 0.7, 0.5]);
+  const deskTop = makeBox(1.8, 0.08, 0.9, deskMat);
+  deskTop.position.set(0, 0.75, -2.5);
+  scene.add(deskTop);
+  // Desk legs
+  for (const dx of [-0.8, 0.8]) {
+    for (const dz of [-0.35, 0.35]) {
+      const leg = makeBox(0.06, 0.75, 0.06, deskMat);
+      leg.position.set(dx, 0.375, -2.5 + dz);
+      scene.add(leg);
+    }
+  }
+
+  // Chair behind desk
+  const chairMat = ps1Material(metalTex(), [0.5, 0.5, 0.5]);
+  const chairSeat = makeBox(0.5, 0.06, 0.5, chairMat);
+  chairSeat.position.set(0, 0.5, -3.2);
+  scene.add(chairSeat);
+  const chairBack = makeBox(0.5, 0.6, 0.06, chairMat);
+  chairBack.position.set(0, 0.8, -3.45);
+  scene.add(chairBack);
+  for (const dx of [-0.2, 0.2]) {
+    const cl = makeBox(0.04, 0.5, 0.04, chairMat);
+    cl.position.set(dx, 0.25, -3.2);
+    scene.add(cl);
+  }
+
+  // Flag on back wall
+  const fMat = ps1Material(flagTex(), [1, 1, 1], 0.65);
+  const flag = makeBox(1.5, 1.0, 0.03, fMat);
+  flag.position.set(-2.5, 2.2, -4.85);
+  scene.add(flag);
+
+  // Map on right wall
+  const mMat = ps1Material(mapTex(), [1, 1, 1], 0.65);
+  const map = makeBox(0.03, 1.0, 1.5, mMat);
+  map.position.set(5.85, 2.0, 0);
+  scene.add(map);
+
+  // Ceiling lights (simple emissive boxes)
+  for (const lx of [-2.5, 2.5]) {
+    const light = makeBox(0.8, 0.06, 0.15, ps1Material(
+      makeTexture(8, 8, (ctx, w, h) => { ctx.fillStyle = '#ffe8c0'; ctx.fillRect(0, 0, w, h); }),
+      [2, 1.9, 1.6], 1.0
+    ));
+    light.position.set(lx, ROOM_H - 0.05, 0);
+    scene.add(light);
+  }
+
+  // Filing cabinets along left wall
+  const cabinetMat = ps1Material(metalTex(), [0.45, 0.5, 0.45]);
+  for (let i = 0; i < 3; i++) {
+    const cab = makeBox(0.5, 1.2, 0.4, cabinetMat);
+    cab.position.set(-5.5, 0.6, -2 + i * 1.5);
+    scene.add(cab);
+    // Drawer handles
+    const handle = makeBox(0.2, 0.02, 0.02, ps1Material(skinTex(), [0.8, 0.8, 0.6]));
+    handle.position.set(-5.25, 0.6 + (i % 2) * 0.3, -2 + i * 1.5);
+    scene.add(handle);
+  }
+}
+
+// ============================================================
+// GUARD AI
+// ============================================================
+class Guard {
+  constructor(model, waypoints, speed = 1.2) {
+    this.model = model;
+    this.waypoints = waypoints;
+    this.speed = speed;
+    this.currentWP = 0;
+    this.state = 'WALK';
+    this.pauseTimer = 0;
+    this.walkPhase = 0;
+    this.stepTimer = 0;
+  }
+
+  update(dt, audioCtx, stepSoundFn) {
+    if (this.state === 'PAUSE') {
+      this.pauseTimer -= dt;
+      // Idle pose
+      this.model.userData.leftLeg.rotation.x = 0;
+      this.model.userData.rightLeg.rotation.x = 0;
+      this.model.userData.leftArm.rotation.x = 0;
+      this.model.userData.rightArm.rotation.x = 0;
+      if (this.pauseTimer <= 0) {
+        this.state = 'WALK';
+        this.currentWP = (this.currentWP + 1) % this.waypoints.length;
+      }
+      return;
+    }
+
+    // WALK state
+    const target = this.waypoints[this.currentWP];
+    const pos = this.model.position;
+    const dx = target.x - pos.x;
+    const dz = target.z - pos.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    if (dist < 0.15) {
+      this.state = 'PAUSE';
+      this.pauseTimer = 1.5 + Math.random() * 2.0;
+      return;
+    }
+
+    // Move toward target
+    const nx = dx / dist;
+    const nz = dz / dist;
+    pos.x += nx * this.speed * dt;
+    pos.z += nz * this.speed * dt;
+
+    // Face movement direction
+    this.model.rotation.y = Math.atan2(nx, nz);
+
+    // Walk cycle animation
+    this.walkPhase += dt * 6.0;
+    const swing = Math.sin(this.walkPhase) * 0.5;
+    this.model.userData.leftLeg.rotation.x = swing;
+    this.model.userData.rightLeg.rotation.x = -swing;
+    this.model.userData.leftArm.rotation.x = -swing * 0.6;
+    this.model.userData.rightArm.rotation.x = swing * 0.6;
+
+    // Footstep sounds
+    this.stepTimer += dt;
+    if (this.stepTimer > 0.4) {
+      this.stepTimer = 0;
+      if (stepSoundFn) stepSoundFn();
+    }
+  }
+}
+
+// ============================================================
+// AUDIO SYSTEM
+// ============================================================
+class AudioSystem {
+  constructor() {
+    this.ctx = null;
+    this.masterGain = null;
+  }
+
+  init() {
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = 0.3;
+    this.masterGain.connect(this.ctx.destination);
+    this.startAmbience();
+    this.scheduleRadioCrackle();
+  }
+
+  startAmbience() {
+    // Low-frequency room hum
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 55;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 100;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.06;
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start();
+
+    // Fluorescent light buzz
+    const buzz = this.ctx.createOscillator();
+    buzz.type = 'square';
+    buzz.frequency.value = 120;
+    const buzzGain = this.ctx.createGain();
+    buzzGain.gain.value = 0.012;
+    const buzzFilter = this.ctx.createBiquadFilter();
+    buzzFilter.type = 'bandpass';
+    buzzFilter.frequency.value = 120;
+    buzzFilter.Q.value = 30;
+    buzz.connect(buzzFilter);
+    buzzFilter.connect(buzzGain);
+    buzzGain.connect(this.masterGain);
+    buzz.start();
+  }
+
+  playFootstep() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    // Short noise burst for footstep
+    const bufferSize = 1024;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / 200);
+    }
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 800;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.15 + Math.random() * 0.08, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    source.start(t);
+    source.stop(t + 0.1);
+  }
+
+  scheduleRadioCrackle() {
+    if (!this.ctx) return;
+    const delay = 5 + Math.random() * 10;
+    setTimeout(() => {
+      this.playRadioCrackle();
+      this.scheduleRadioCrackle();
+    }, delay * 1000);
+  }
+
+  playRadioCrackle() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+
+    // Codec beep
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1200, t);
+    osc.frequency.setValueAtTime(1600, t + 0.05);
+    const beepGain = this.ctx.createGain();
+    beepGain.gain.setValueAtTime(0.08, t);
+    beepGain.gain.setValueAtTime(0.06, t + 0.05);
+    beepGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    osc.connect(beepGain);
+    beepGain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.15);
+
+    // Static burst
+    const bufferSize = this.ctx.sampleRate * 0.3;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+    }
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    const staticGain = this.ctx.createGain();
+    staticGain.gain.setValueAtTime(0.04, t + 0.12);
+    staticGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    const bandpass = this.ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = 2000;
+    bandpass.Q.value = 2;
+    source.connect(bandpass);
+    bandpass.connect(staticGain);
+    staticGain.connect(this.masterGain);
+    source.start(t + 0.12);
+    source.stop(t + 0.5);
+  }
+}
+
+// ============================================================
+// MAIN APP
+// ============================================================
+const PS1_W = 320, PS1_H = 240;
+let started = false;
+const audio = new AudioSystem();
+const clock = new THREE.Clock();
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(1);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x0a0a0a);
+document.body.appendChild(renderer.domElement);
+
+// Low-res render target
+const renderTarget = new THREE.WebGLRenderTarget(PS1_W, PS1_H, {
+  minFilter: THREE.NearestFilter,
+  magFilter: THREE.NearestFilter,
+  format: THREE.RGBAFormat,
+});
+
+// Fullscreen blit scene
+const blitScene = new THREE.Scene();
+const blitCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const blitQuad = new THREE.Mesh(
+  new THREE.PlaneGeometry(2, 2),
+  new THREE.MeshBasicMaterial({ map: renderTarget.texture })
+);
+blitScene.add(blitQuad);
+
+// Main scene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a0a);
+
+// Camera
+const camera = new THREE.PerspectiveCamera(60, PS1_W / PS1_H, 0.1, 50);
+
+// Build the room
+buildRoom(scene);
+
+// Simple directional "light" — we bake this into vertex colors / shader ambient
+// Since we use raw shaders, Three.js lights won't work — ambient is in the shader
+
+// VIP character — olive uniform, standing behind desk
+const vip = buildHumanoid('#3a4a2a', false, true);
+vip.position.set(0, 0, -3.0);
+vip.rotation.y = 0;
+scene.add(vip);
+
+// VIP idle head bob
+let vipBobPhase = 0;
+
+// Guards with patrol paths
+const guardData = [
+  {
+    color: '#3a4a2a',
+    start: new THREE.Vector3(-3, 0, 2),
+    waypoints: [
+      new THREE.Vector3(-3, 0, 2),
+      new THREE.Vector3(-3, 0, -2),
+      new THREE.Vector3(-4.5, 0, -2),
+      new THREE.Vector3(-4.5, 0, 2),
+    ]
+  },
+  {
+    color: '#3a4a2a',
+    start: new THREE.Vector3(3, 0, 2),
+    waypoints: [
+      new THREE.Vector3(3, 0, 2),
+      new THREE.Vector3(3, 0, -2),
+      new THREE.Vector3(4.5, 0, -2),
+      new THREE.Vector3(4.5, 0, 2),
+    ]
+  },
+  {
+    color: '#3a4a2a',
+    start: new THREE.Vector3(0, 0, 3.5),
+    waypoints: [
+      new THREE.Vector3(-2, 0, 3.5),
+      new THREE.Vector3(2, 0, 3.5),
+      new THREE.Vector3(2, 0, 1.5),
+      new THREE.Vector3(-2, 0, 1.5),
+    ]
+  },
+  {
+    color: '#3a4a2a',
+    start: new THREE.Vector3(-1, 0, -1),
+    waypoints: [
+      new THREE.Vector3(-1, 0, -1),
+      new THREE.Vector3(1, 0, -1),
+      new THREE.Vector3(1.5, 0, 1),
+      new THREE.Vector3(-1.5, 0, 1),
+    ]
+  },
+];
+
+const guards = [];
+for (const gd of guardData) {
+  const model = buildHumanoid(gd.color, true, false);
+  model.position.copy(gd.start);
+  scene.add(model);
+  guards.push(new Guard(model, gd.waypoints, 1.0 + Math.random() * 0.3));
+}
+
+// Camera orbit params
+const CAM_RADIUS = 6.5;
+const CAM_HEIGHT = 2.8;
+const CAM_SPEED = 0.15;
+const CAM_TARGET = new THREE.Vector3(0, 1.2, -2.5);
+let camAngle = 0;
+
+// ============================================================
+// START SCREEN
+// ============================================================
+const startScreen = document.getElementById('start-screen');
+startScreen.addEventListener('click', () => {
+  startScreen.style.display = 'none';
+  audio.init();
+  started = true;
+});
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.1);
+
+  if (!started) {
+    renderer.clear();
+    return;
+  }
+
+  // Update guards
+  for (const guard of guards) {
+    guard.update(dt, audio.ctx, () => audio.playFootstep());
+  }
+
+  // VIP idle animation — subtle head bob and slight body sway
+  vipBobPhase += dt * 1.5;
+  vip.userData.head.position.y = 1.5 + Math.sin(vipBobPhase) * 0.008;
+  vip.userData.head.rotation.y = Math.sin(vipBobPhase * 0.7) * 0.04;
+  // Hands behind back pose
+  vip.userData.leftArm.rotation.x = 0.3;
+  vip.userData.leftArm.rotation.z = 0.15;
+  vip.userData.rightArm.rotation.x = 0.3;
+  vip.userData.rightArm.rotation.z = -0.15;
+
+  // Camera orbit
+  camAngle += CAM_SPEED * dt;
+  camera.position.set(
+    CAM_TARGET.x + Math.sin(camAngle) * CAM_RADIUS,
+    CAM_HEIGHT,
+    CAM_TARGET.z + Math.cos(camAngle) * CAM_RADIUS
+  );
+  camera.lookAt(CAM_TARGET);
+
+  // Render to low-res target
+  renderer.setRenderTarget(renderTarget);
+  renderer.render(scene, camera);
+
+  // Blit upscaled to screen
+  renderer.setRenderTarget(null);
+  renderer.render(blitScene, blitCamera);
+}
+
+animate();
+
+// Handle resize
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
