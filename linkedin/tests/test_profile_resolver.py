@@ -62,6 +62,21 @@ def test_extract_urn_from_html_picks_first_match() -> None:
     assert extract_urn_from_html(html) == "urn:li:fsd_profile:FIRST"
 
 
+def test_extract_urn_from_html_skips_short_template_placeholder() -> None:
+    """Real profile pages embed template strings like 'urn:li:fsd_profile:urn:li:...'
+    before any real ACoA... identifier. The resolver must skip those and return
+    the real URN instead of 'urn:li:fsd_profile:urn'.
+    """
+    html = (
+        'schema="urn:li:fsd_profile:urn:li:fs_miniProfile:XYZ" '
+        'data={"entityUrn":"urn:li:fsd_profile:ACoAAGdEz4EBa1TobuR0C7U"}'
+    )
+    assert (
+        extract_urn_from_html(html)
+        == "urn:li:fsd_profile:ACoAAGdEz4EBa1TobuR0C7U"
+    )
+
+
 # --- resolve_profile_urn ---
 
 

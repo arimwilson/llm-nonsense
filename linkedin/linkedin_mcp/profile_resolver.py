@@ -18,8 +18,10 @@ _PROFILE_SLUG_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Matches any urn:li:fsd_profile:IDENTIFIER in text or HTML
-_PROFILE_URN_RE = re.compile(r"urn:li:fsd_profile:([A-Za-z0-9_-]+)")
+# Matches any urn:li:fsd_profile:IDENTIFIER in text or HTML.
+# The {5,} floor skips literal template strings like "urn:li:fsd_profile:urn"
+# that appear in profile page HTML and would otherwise produce a garbage URN.
+_PROFILE_URN_RE = re.compile(r"urn:li:fsd_profile:([A-Za-z0-9_-]{5,})")
 
 
 def extract_slug(profile_url: str) -> str | None:
